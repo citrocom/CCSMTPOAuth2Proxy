@@ -1,0 +1,20 @@
+# Compiled program and AutoIt3Wrapper output
+*.exe
+*.a3x
+BackUp/
+*_stripped.au3
+*.au3.bak
+
+# Created at runtime next to the program - never commit these:
+# the INI file holds the (DPAPI-encrypted) secrets and tokens of the accounts
+CCSMTPOAuth2Proxy.ini
+*.ini
+log/
+*.log
+# rewritten on every start from the script itself
+CCSMTPOAuth2Proxy-RelayHelper.ps1
+
+# Windows / editor clutter
+Thumbs.db
+desktop.ini
+*.tmp

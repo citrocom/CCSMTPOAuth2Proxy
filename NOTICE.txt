@@ -1,0 +1,9 @@
+CCSMTPOAuth2Proxy
+Copyright 2026 Markus Debus
+
+This product includes ideas from email-oauth2-proxy
+(https://github.com/simonrob/email-oauth2-proxy), a project by Simon
+Robinson licensed under the Apache License, Version 2.0. No source code
+from that project was copied or translated; CCSMTPOAuth2Proxy is an
+independent, from-scratch implementation (in a different programming
+language) of the same general concept - a local SMTP-to-OAuth2 proxy.
