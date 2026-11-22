@@ -27,6 +27,29 @@ fresh, and relays the message over its own TLS connection.
   heartbeat for monitoring services (healthchecks.io, Uptime Kuma, ...)
 - Detailed, rotating log with selectable detail level
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/tray-menu.png" alt="Tray menu with the Settings submenu" width="460"><br>
+  <em>Tray menu: account status, Settings submenu, log file</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/account-settings.png" alt="Account Settings" width="800"><br>
+  <em>Account Settings: all accounts with their local listener, server and status</em>
+</p>
+
+<table>
+  <tr>
+    <td align="center" valign="top"><img src="docs/screenshots/add-account.png" alt="Add account" width="380"><br><em>Adding an account (Microsoft 365 preset)</em></td>
+    <td align="center" valign="top"><img src="docs/screenshots/notifications.png" alt="Notification settings" width="420"><br><em>Notifications: ntfy, webhook, command, heartbeat</em></td>
+  </tr>
+  <tr>
+    <td align="center" valign="top"><img src="docs/screenshots/advanced-settings.png" alt="Advanced settings" width="420"><br><em>Advanced settings with tooltips for every value</em></td>
+    <td align="center" valign="top"><img src="docs/screenshots/about.png" alt="About window" width="380"><br><em>About window</em></td>
+  </tr>
+</table>
+
 ## Requirements
 
 - Windows 10/11 or Windows Server 2019/2022/2025 with Desktop Experience
