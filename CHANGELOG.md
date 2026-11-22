@@ -5,6 +5,13 @@ in brackets the `#AutoIt3Wrapper_Res_Fileversion` (shown in the tray menu
 and the log). The open items and ideas are kept in the roadmap
 (README.txt, section 16).
 
+## v80 (1.0.0.62)
+- Notifications window 606 px high instead of 712 px, so it fits above the
+  taskbar on small screens: Command and Heartbeat side by side, grey hint
+  texts in the empty Command / Ping URL fields.
+- Advanced settings: hint text says "clearing the log" (there is only one
+  log since v71).
+
 ## v79 (1.0.0.61)
 - The TODO list moved from the script header into README.txt, section 16
   ("Roadmap") - one place for all open items.

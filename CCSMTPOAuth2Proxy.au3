@@ -1,7 +1,7 @@
 ﻿#NoTrayIcon
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=icons\default.ico
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.61
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.62
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #AutoIt3Wrapper_Res_Icon_Add=icons\Exit.ico
 #AutoIt3Wrapper_Res_Icon_Add=icons\Settings.ico
@@ -5842,7 +5842,10 @@ EndFunc   ;==>__NotifySendCommand
 ; ============================================================================
 Func _ShowNotificationSettingsDialog($hParent = 0)
 	Local Const $iW = 640
-	Local $hGui = GUICreate("Notifications - " & $g_sAppName, $iW, 712, -1, -1, -1, -1, $hParent)
+	; Y1 (v80): 606 px high (was 712 px, which did not fit above the taskbar
+	; on a 768 px high work area): Command and Heartbeat side by side, a
+	; slightly smaller template field and result field.
+	Local $hGui = GUICreate("Notifications - " & $g_sAppName, $iW, 606, -1, -1, -1, -1, $hParent)
 	_SetDialogIcon($hGui)
 	Local Const $xL = 28, $xI = 120, $wI = 492, $xT = 517
 
@@ -5882,7 +5885,7 @@ Func _ShowNotificationSettingsDialog($hParent = 0)
 	GUICtrlCreateGroup("", -99, -99, 1, 1)
 
 	; ---- Webhook -----------------------------------------------------------
-	GUICtrlCreateGroup("Webhook - Teams, Slack, Discord, Home Assistant, n8n, Node-RED, ...", 15, 128, $iW - 30, 178)
+	GUICtrlCreateGroup("Webhook - Teams, Slack, Discord, Home Assistant, n8n, Node-RED, ...", 15, 128, $iW - 30, 166)
 	Local $idHookOn = GUICtrlCreateCheckbox("Send notifications to a webhook", $xL, 148, 300, 20)
 	GUICtrlSetTip($idHookOn, "Sends every message as an HTTPS POST with a JSON text to the URL below." & @CRLF & _
 			"INI: [Notify] WebhookEnabled, default: off")
@@ -5902,7 +5905,7 @@ Func _ShowNotificationSettingsDialog($hParent = 0)
 	GUICtrlSetTip($idHookPreset, "Fills the template below with the JSON format the chosen service expects." & @CRLF & _
 			"You can change the template afterwards.")
 	GUICtrlCreateLabel("Template:", $xL, 238, 85, 18)
-	Local $idHookTpl = GUICtrlCreateEdit($g_sWebhookTemplate, $xI, 236, $wI, 60, _
+	Local $idHookTpl = GUICtrlCreateEdit($g_sWebhookTemplate, $xI, 236, $wI, 48, _
 			BitOR($ES_MULTILINE, $ES_WANTRETURN, $ES_AUTOVSCROLL, $WS_VSCROLL))
 	GUICtrlSetTip($idHookTpl, "The JSON text that is sent. Placeholders:" & @CRLF & _
 			"  {headline}  program (PC): title      {title}  e.g. ""Sign-in required""" & @CRLF & _
@@ -5913,15 +5916,16 @@ Func _ShowNotificationSettingsDialog($hParent = 0)
 	GUICtrlCreateGroup("", -99, -99, 1, 1)
 
 	; ---- Command -----------------------------------------------------------
-	GUICtrlCreateGroup("Command - run a program or script for every message", 15, 312, $iW - 30, 82)
-	Local $idCmdOn = GUICtrlCreateCheckbox("Run a command", $xL, 332, 300, 20)
+	; Command (left) and Heartbeat (right) share one row (Y1)
+	GUICtrlCreateGroup("Command - your own program or script", 15, 300, 300, 82)
+	Local $idCmdOn = GUICtrlCreateCheckbox("Run a command", $xL, 320, 180, 20)
 	GUICtrlSetTip($idCmdOn, "Runs the command below (hidden, via cmd.exe) for every message - for anything" & @CRLF & _
 			"that has no channel of its own (Signal via signal-cli, a monitoring agent, a mail tool, ...)." & @CRLF & _
 			"INI: [Notify] CommandEnabled, default: off")
-	Local $idCmdTest = GUICtrlCreateButton("Test", $xT, 329, 95, 25)
+	Local $idCmdTest = GUICtrlCreateButton("Test", 225, 317, 80, 25)
 	GUICtrlSetTip($idCmdTest, "Run the command once now with a test message.")
-	GUICtrlCreateLabel("Command:", $xL, 363, 85, 18)
-	Local $idCmd = GUICtrlCreateInput($g_sNotifyCommand, $xI, 360, $wI, 21)
+	Local $idCmd = GUICtrlCreateInput($g_sNotifyCommand, $xL, 348, 277, 21)
+	__SetCueBanner($idCmd, "Command line, e.g. powershell -File ...")
 	GUICtrlSetTip($idCmd, "Command line, with the same placeholders as the webhook template, e.g." & @CRLF & _
 			"  powershell -NoProfile -File C:\Scripts\notify.ps1 ""{event}"" ""{message}""" & @CRLF & _
 			"Characters the command line would interpret (< > | & ^ % "") are removed from the" & @CRLF & _
@@ -5932,78 +5936,78 @@ Func _ShowNotificationSettingsDialog($hParent = 0)
 	GUICtrlCreateGroup("", -99, -99, 1, 1)
 
 	; ---- Heartbeat ---------------------------------------------------------
-	GUICtrlCreateGroup("Heartbeat - be alerted when the proxy itself stops working", 15, 400, $iW - 30, 82)
-	Local $idHbOn = GUICtrlCreateCheckbox("Send a regular ping (heartbeat)", $xL, 420, 300, 20)
+	GUICtrlCreateGroup("Heartbeat - alarm when the proxy stops", 325, 300, 300, 82)
+	Local $idHbOn = GUICtrlCreateCheckbox("Send a regular ping", 338, 320, 180, 20)
 	GUICtrlSetTip($idHbOn, "Calls the ping URL below regularly - but only while the proxy really works." & @CRLF & _
 			"If the pings stop (proxy crashed or hanging, PC off, no internet), the monitoring" & @CRLF & _
 			"service (healthchecks.io, Uptime Kuma, Better Stack, ...) alerts you. This is the" & @CRLF & _
 			"only way to hear about a proxy that can no longer send anything itself." & @CRLF & _
 			"INI: [Notify] HeartbeatEnabled, default: off")
-	Local $idHbTest = GUICtrlCreateButton("Test", $xT, 417, 95, 25)
+	Local $idHbTest = GUICtrlCreateButton("Test", 535, 317, 80, 25)
 	GUICtrlSetTip($idHbTest, "Send one ping now with the values in this window.")
-	GUICtrlCreateLabel("Ping URL:", $xL, 451, 85, 18)
-	Local $idHbUrl = GUICtrlCreateInput(_DPAPI_Unprotect($g_sHeartbeatUrlEnc, "heartbeat URL"), $xI, 448, 330, 21)
+	Local $idHbUrl = GUICtrlCreateInput(_DPAPI_Unprotect($g_sHeartbeatUrlEnc, "heartbeat URL"), 338, 348, 160, 21)
+	__SetCueBanner($idHbUrl, "Ping URL (https://...)")
 	GUICtrlSetTip($idHbUrl, "The ping URL of your check, e.g." & @CRLF & _
 			"  https://hc-ping.com/<uuid>                       (healthchecks.io)" & @CRLF & _
 			"  https://kuma.example.com/api/push/<token>?status=up&msg=OK   (Uptime Kuma)" & @CRLF & _
 			"Stored encrypted. INI: [Notify] HeartbeatUrlEnc")
-	GUICtrlCreateLabel("every", 462, 451, 35, 18)
-	Local $idHbInt = GUICtrlCreateInput($g_iHeartbeatIntervalMin, 500, 448, 45, 21, BitOR($GUI_SS_DEFAULT_INPUT, $ES_RIGHT))
+	GUICtrlCreateLabel("every", 503, 351, 33, 18)
+	Local $idHbInt = GUICtrlCreateInput($g_iHeartbeatIntervalMin, 537, 348, 40, 21, BitOR($GUI_SS_DEFAULT_INPUT, $ES_RIGHT))
 	GUICtrlSetTip($idHbInt, "Minutes between two pings (1-1440). Set the monitoring service's period to the" & @CRLF & _
 			"same value and allow a grace time of at least as much again." & @CRLF & _
 			"INI: [Notify] HeartbeatIntervalMin, default: 5")
-	GUICtrlCreateLabel("min", 550, 451, 40, 18)
+	GUICtrlCreateLabel("min", 581, 351, 30, 18)
 	GUICtrlCreateGroup("", -99, -99, 1, 1)
 
 	; ---- Events ------------------------------------------------------------
-	GUICtrlCreateGroup("Events (for ntfy, webhook and command)", 15, 488, $iW - 30, 128)
-	Local $idEvReauth = GUICtrlCreateCheckbox("Sign-in required", $xL, 508, 280, 20)
+	GUICtrlCreateGroup("Events (for ntfy, webhook and command)", 15, 388, $iW - 30, 128)
+	Local $idEvReauth = GUICtrlCreateCheckbox("Sign-in required", $xL, 408, 280, 20)
 	GUICtrlSetTip($idEvReauth, "An account needs a new sign-in (revoked, expired, password changed), and at the" & @CRLF & _
 			"start for every active account that has no sign-in yet." & @CRLF & _
 			"INI: [Notify] EventReauth, default: on")
-	Local $idEvRefresh = GUICtrlCreateCheckbox("Token renewal failed (twice in a row)", $xL, 532, 280, 20)
+	Local $idEvRefresh = GUICtrlCreateCheckbox("Token renewal failed (twice in a row)", $xL, 432, 280, 20)
 	GUICtrlSetTip($idEvRefresh, "The access token could not be renewed twice in a row (e.g. disruption at" & @CRLF & _
 			"Microsoft/Google, expired client secret). A single failure is not reported." & @CRLF & _
 			"INI: [Notify] EventRefreshFail, default: on")
-	Local $idEvRefused = GUICtrlCreateCheckbox("E-mail refused by the mail server", $xL, 556, 280, 20)
+	Local $idEvRefused = GUICtrlCreateCheckbox("E-mail refused by the mail server", $xL, 456, 280, 20)
 	GUICtrlSetTip($idEvRefused, "The real mail server did not accept an e-mail (e.g. ""Send As"" not allowed," & @CRLF & _
 			"mailbox full, message too large) - with sender, recipient, subject and the reply." & @CRLF & _
 			"INI: [Notify] EventRefused, default: on")
-	Local $idEvErrors = GUICtrlCreateCheckbox("Repeated errors (3 within 15 min)", 330, 508, 280, 20)
+	Local $idEvErrors = GUICtrlCreateCheckbox("Repeated errors (3 within 15 min)", 330, 408, 280, 20)
 	GUICtrlSetTip($idEvErrors, "Three error answers of the mail server (or sign-ins it did not answer) for the" & @CRLF & _
 			"same account within 15 minutes." & @CRLF & _
 			"INI: [Notify] EventErrors, default: on")
-	Local $idEvLoop = GUICtrlCreateCheckbox("Proxy blocked for at least", 330, 532, 160, 20)
+	Local $idEvLoop = GUICtrlCreateCheckbox("Proxy blocked for at least", 330, 432, 160, 20)
 	GUICtrlSetTip($idEvLoop, "Nothing could be accepted or relayed for at least this long (sent once the" & @CRLF & _
 			"block is over; not for a standby of the PC). Needs ""Warning: main loop blocked" & @CRLF & _
 			"for"" in the Advanced settings to be on (not 0)." & @CRLF & _
 			"INI: [Notify] EventLoopBlock, default: on")
-	Local $idLoopSec = GUICtrlCreateInput($g_iNotifyLoopBlockSec, 495, 531, 45, 21, BitOR($GUI_SS_DEFAULT_INPUT, $ES_RIGHT))
+	Local $idLoopSec = GUICtrlCreateInput($g_iNotifyLoopBlockSec, 495, 431, 45, 21, BitOR($GUI_SS_DEFAULT_INPUT, $ES_RIGHT))
 	GUICtrlSetTip($idLoopSec, "Seconds (10-3600). INI: [Notify] LoopBlockSec, default: 60")
-	GUICtrlCreateLabel("s", 545, 534, 20, 18)
-	Local $idEvStart = GUICtrlCreateCheckbox("Proxy started / stopped", 330, 556, 280, 20)
+	GUICtrlCreateLabel("s", 545, 434, 20, 18)
+	Local $idEvStart = GUICtrlCreateCheckbox("Proxy started / stopped", 330, 456, 280, 20)
 	GUICtrlSetTip($idEvStart, "A message when the program starts and when it is ended via Exit." & @CRLF & _
 			"INI: [Notify] EventStartStop, default: on")
-	Local $idAllClear = GUICtrlCreateCheckbox("""OK again"" message when a problem is resolved", $xL, 584, 290, 20)
+	Local $idAllClear = GUICtrlCreateCheckbox("""OK again"" message when a problem is resolved", $xL, 484, 290, 20)
 	GUICtrlSetTip($idAllClear, "E.g. ""OK again: Sign-in required"" once the account has been signed in again," & @CRLF & _
 			"so you know the problem is gone." & @CRLF & _
 			"INI: [Notify] AllClear, default: on")
-	GUICtrlCreateLabel("Same message at most every", 330, 587, 160, 18)
-	Local $idMinInt = GUICtrlCreateInput($g_iNotifyMinIntervalMin, 495, 584, 45, 21, BitOR($GUI_SS_DEFAULT_INPUT, $ES_RIGHT))
+	GUICtrlCreateLabel("Same message at most every", 330, 487, 160, 18)
+	Local $idMinInt = GUICtrlCreateInput($g_iNotifyMinIntervalMin, 495, 484, 45, 21, BitOR($GUI_SS_DEFAULT_INPUT, $ES_RIGHT))
 	GUICtrlSetTip($idMinInt, "Rate limit: the same event for the same account is sent at most once in this" & @CRLF & _
 			"many minutes (0 = no limit; 0-1440). Prevents a flood of messages during a" & @CRLF & _
 			"disruption. INI: [Notify] MinIntervalMin, default: 60")
-	GUICtrlCreateLabel("min", 545, 587, 40, 18)
+	GUICtrlCreateLabel("min", 545, 487, 40, 18)
 	GUICtrlCreateGroup("", -99, -99, 1, 1)
 
 	; ---- Result of the last test + buttons -----------------------------------
-	Local $idResult = GUICtrlCreateEdit("Result of the last test appears here.", 15, 624, $iW - 30, 40, _
+	Local $idResult = GUICtrlCreateEdit("Result of the last test appears here.", 15, 524, $iW - 30, 34, _
 			BitOR($ES_MULTILINE, $ES_READONLY, $ES_AUTOVSCROLL, $WS_VSCROLL))
 	GUICtrlSetBkColor($idResult, 0xFFFFFF)
 	GUICtrlSetTip($idResult, "Result of the last ""Test"" (also written to the log).")
-	Local $idSave = GUICtrlCreateButton("Save", $iW - 235, 672, 105, 30)
+	Local $idSave = GUICtrlCreateButton("Save", $iW - 235, 566, 105, 30)
 	GUICtrlSetTip($idSave, "Check the values, save them and use them right away.")
-	Local $idCancel = GUICtrlCreateButton("Cancel", $iW - 120, 672, 105, 30)
+	Local $idCancel = GUICtrlCreateButton("Cancel", $iW - 120, 566, 105, 30)
 	GUICtrlSetTip($idCancel, "Close this window and discard all changes (the same as X or Esc).")
 
 	; Current state of the switches
@@ -6139,6 +6143,12 @@ Func _ShowNotificationSettingsDialog($hParent = 0)
 EndFunc   ;==>_ShowNotificationSettingsDialog
 
 ; Small helpers of the Notifications dialog
+
+; Y1 (v80): grey hint text shown in an EMPTY input field (EM_SETCUEBANNER) -
+; replaces the field labels that no longer fit next to Command / Ping URL.
+Func __SetCueBanner($idCtl, $sText)
+	DllCall("user32.dll", "lresult", "SendMessageW", "hwnd", GUICtrlGetHandle($idCtl), "uint", 0x1501, "wparam", True, "wstr", $sText)
+EndFunc   ;==>__SetCueBanner
 
 ; X1 (v78): suggested ntfy topic "<AppName>-" plus 8 random letters/digits
 ; (62^8, about 2 * 10^14 possibilities - not guessable). Worked out once per
@@ -6415,7 +6425,7 @@ Func _ShowAdvancedSettingsDialog($hParent = 0)
 	Next
 
 	Local $idInfo = GUICtrlCreateLabel("Changes take effect as soon as you click ""Save"" (settings that only matter at a certain " & _
-			"moment - e.g. clearing the logs at the start - at that moment). ""Cancel"" discards all changes. " & _
+			"moment - e.g. clearing the log at the start - at that moment). ""Cancel"" discards all changes. " & _
 			"Hover over a setting for a detailed explanation.", 20, 368, 720, 34)
 	GUICtrlSetColor($idInfo, 0x505050)
 
