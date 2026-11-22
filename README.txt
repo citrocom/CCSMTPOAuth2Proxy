@@ -1544,6 +1544,18 @@ comments. The effort is a rough estimate including tests.
        1.7.2 A "fail" signal to the heartbeat service on a regular stop
              (Exit), so the service reports it at once instead of only
              after period + grace time. Effort: about 0.5 h.
+   1.8 Installation via winget, the package manager built into Windows
+       ("winget install CITRO.CCSMTPOAuth2Proxy", and later "winget
+       upgrade" for updates). This needs a small description file (a
+       "manifest") submitted to Microsoft's public winget repository
+       (github.com/microsoft/winget-pkgs); it points to the ZIP of the
+       GitHub release, so nothing else has to be hosted. The manifest is
+       checked automatically and by Microsoft before it is accepted - the
+       code signature of the .exe helps there. Every new release then
+       needs an updated manifest (can be automated, e.g. with
+       "wingetcreate update"). Note: winget installs the program into a
+       folder of its own, which must stay writable for the INI file and
+       the log (section 2). Effort: 1-2 h, plus the review by Microsoft.
 
 2. Performance (good at the moment - only if problems show up again)
    2.1 Greet the device and answer its EHLO locally and at once, while the
