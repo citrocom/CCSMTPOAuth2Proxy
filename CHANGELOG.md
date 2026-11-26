@@ -5,6 +5,12 @@ in brackets the `#AutoIt3Wrapper_Res_Fileversion` (shown in the tray menu
 and the log). The open items and ideas are kept in the roadmap
 (README.txt, section 16).
 
+## v82 (1.0.0.64)
+- Version info of the .exe: description, product name and version,
+  company and copyright are now the program's own (before: the AutoIt
+  defaults "Aut2Exe", "3.3.18.0" and the AutoIt copyright) - visible in
+  the file properties, the Task Manager and the Windows Firewall prompt.
+
 ## v81 (1.0.0.63)
 - Notifications: **Telegram** as a new channel (a bot of your own, bot
   token + chat ID, "Find chat ID" button; problems with sound, "OK again"

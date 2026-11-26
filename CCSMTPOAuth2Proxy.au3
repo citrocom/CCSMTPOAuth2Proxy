@@ -1,8 +1,14 @@
 ﻿#NoTrayIcon
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=icons\default.ico
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.63
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.64
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
+#AutoIt3Wrapper_Res_ProductVersion=1.0.0.64
+#AutoIt3Wrapper_Res_Description=CCSMTPOAuth2Proxy - SMTP-to-OAuth2 proxy
+#AutoIt3Wrapper_Res_ProductName=CCSMTPOAuth2Proxy
+#AutoIt3Wrapper_Res_CompanyName=CITRO Computer
+#AutoIt3Wrapper_Res_LegalCopyright=(c) 2026 Markus Debus, CITRO Computer
+#AutoIt3Wrapper_Res_Language=1033
 #AutoIt3Wrapper_Res_Icon_Add=icons\Exit.ico
 #AutoIt3Wrapper_Res_Icon_Add=icons\Settings.ico
 #AutoIt3Wrapper_Res_Icon_Add=icons\Log.ico
@@ -13,6 +19,10 @@
 #AutoIt3Wrapper_Res_Icon_Add=icons\Advanced.ico
 #AutoIt3Wrapper_Res_Icon_Add=icons\Notify.ico
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
+; AA1 (v82): version info shown in the file properties, the Task Manager and
+; the Windows Firewall prompt (before: AutoIt defaults "Aut2Exe", product
+; version = AutoIt version, AutoIt copyright). Res_ProductVersion must be
+; raised together with Res_Fileversion for every new version.
 Opt("TrayMenuMode", 3)          ; 1 = no automatic default menu, 2 = no automatic checkmark on click
 Opt("TrayOnEventMode", 0)       ; use the TrayGetMsg() polling style
 Opt("MustDeclareVars", 1)       ; every variable must be explicitly Local/Global/Dim/Const'd before use
