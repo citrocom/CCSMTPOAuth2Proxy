@@ -159,8 +159,9 @@ icon to open the menu. From top to bottom:
                            changes; "Defaults" fills in the default
                            values (saved only with "Save").
                  Notifications  Opens the window for notifications to
-                           the phone (ntfy), to a webhook (Teams, Slack,
-                           ...), to a command of your own, and for the
+                           the phone (ntfy, Telegram), to a webhook
+                           (Teams, Slack, ...), to a command of your own,
+                           and for the
                            heartbeat that raises an alarm when the proxy
                            stops - see section 15.
                  Autostart A checkable item - tick it to have this
@@ -1179,7 +1180,7 @@ RelayDebugLog and TcpTimeoutMs, 0 is the normal value.
 
 
 -------------------------------------------------------------------------------
- 15. NOTIFICATIONS (ntfy, webhook, command, heartbeat)
+ 15. NOTIFICATIONS (ntfy, Telegram, webhook, command, heartbeat)
 -------------------------------------------------------------------------------
 
 The program can tell you by itself when something is wrong - for example
@@ -1194,16 +1195,18 @@ new settings right away, "Cancel" (or the X) discards all changes.
 E-mail is deliberately NOT one of the channels: in the most important
 case - the sign-in has expired - the proxy cannot send e-mail itself.
 
-Four channels can be switched on independently of each other:
+Five channels can be switched on independently of each other:
 
   ntfy        Push messages to the phone (ntfy app) - the simplest way.
+  Telegram    Messages from a Telegram bot of your own into your chat, a
+              group or a channel.
   Webhook     An HTTPS POST with a JSON text to a service of your choice:
               Microsoft Teams, Slack, Discord, Mattermost, Home Assistant,
               n8n, Node-RED, Zapier/Make, SMS gateways with an HTTP API ...
   Command     Runs a program or script of your own for every message.
   Heartbeat   Works the other way round: the proxy calls a ping address
               regularly, and a monitoring service raises the alarm when the
-              pings stop - see 15.4. This is the only way to hear about a
+              pings stop - see 15.5. This is the only way to hear about a
               proxy that has crashed, hangs or runs on a PC that is off.
 
 These events are reported (each can be switched off; all are on by
@@ -1310,7 +1313,50 @@ it in "Access token". With your own server, enter its address as
 server" with the same address.
 
 
- 15.2 Webhooks - Teams, Slack, Discord, Home Assistant and others
+ 15.2 Telegram - messages from a bot of your own
+ -----------------------------------------------
+
+Telegram bots are free. The proxy sends its messages as such a bot -
+into your private chat with it, into a group or into a channel.
+
+  1. Create the bot: in Telegram, open a chat with @BotFather (the
+     official bot for creating bots, with the blue checkmark) and send
+     /newbot. Choose a display name (e.g. "SMTP Proxy CITRO") and a user
+     name that ends in "bot" (e.g. CitroProxyAlarmBot). BotFather answers
+     with the bot token - it looks like 123456789:AAH...xyz. Whoever has
+     the token controls the bot, so keep it to yourself.
+  2. Write to the bot: open the chat with your new bot (BotFather shows a
+     link to it) and tap "Start" or send any message. A bot may only
+     write to people who wrote to it first.
+     For a group: add the bot to the group and send a message there (if
+     it is not found, send "/start@<bot name>" in the group).
+     For a channel: make the bot an administrator of the channel; the
+     chat ID is then @channelname (public channel) or a number starting
+     with -100 (private channel).
+  3. In Settings -> Notifications: tick "Send via Telegram", paste the
+     bot token and click "Find chat ID". The proxy asks Telegram which
+     chats recently wrote to the bot and fills in the ID if there is
+     exactly one (otherwise all are listed at the bottom of the window -
+     enter the right one by hand). Then click "Test" - the test message
+     should arrive within seconds - and "Save".
+
+Problems arrive with sound; "OK again" and start/stop messages arrive
+silently (shown, but without a sound). The messages are sent as plain
+text. The bot token is stored encrypted and never written to the log
+(only "api.telegram.org" is).
+
+Notes:
+  - Telegram only remembers for about 24 hours who wrote to the bot -
+    write to it shortly before clicking "Find chat ID".
+  - A bot that is also used by another program with a webhook cannot be
+    asked for its chats (Telegram answers HTTP 409) - use a bot of its
+    own for the proxy.
+  - Chats with bots are not end-to-end encrypted; the messages go through
+    Telegram's servers. They contain account names and, for a refused
+    e-mail, sender, recipient and subject.
+
+
+ 15.3 Webhooks - Teams, Slack, Discord, Home Assistant and others
  ----------------------------------------------------------------
 
 A webhook is an internet address of a service that accepts messages: the
@@ -1396,7 +1442,7 @@ A success is any HTTP answer from 200 to 299; anything else is logged as
 "Notification error" with the service's answer.
 
 
- 15.3 Command - your own program or script
+ 15.4 Command - your own program or script
  -----------------------------------------
 
 For everything that has no channel of its own (Signal via signal-cli, a
@@ -1418,7 +1464,7 @@ after that is left alone, and the log says so). The command runs under
 the same Windows user as the proxy.
 
 
- 15.4 Heartbeat - an alarm when the proxy itself stops working
+ 15.5 Heartbeat - an alarm when the proxy itself stops working
  -------------------------------------------------------------
 
 All other channels need a working proxy. If it has crashed, hangs, or
@@ -1469,13 +1515,14 @@ there would be a line every five minutes); a failed ping is always
 logged.
 
 
- 15.5 Settings in the INI file
+ 15.6 Settings in the INI file
  -----------------------------
 
 All of this is stored in the [Notify] section of CCSMTPOAuth2Proxy.ini
 and is normally only changed in the Notifications window:
 
   NtfyEnabled, NtfyServer (https://ntfy.sh), NtfyTopic, NtfyTokenEnc
+  TelegramEnabled, TelegramTokenEnc, TelegramChatId
   WebhookEnabled, WebhookUrlEnc, WebhookTemplate
   CommandEnabled, Command
   HeartbeatEnabled, HeartbeatUrlEnc, HeartbeatIntervalMin (5, 1-1440)
@@ -1539,9 +1586,7 @@ comments. The effort is a rough estimate including tests.
        hangs happen more often (the log shows them clearly: "did not
        answer the sign-in"). Effort: 2-3 h.
    1.7 Additions to the notifications (section 15):
-       1.7.1 Telegram as a further channel (bot token + chat ID).
-             Effort: 0.5-1 h.
-       1.7.2 A "fail" signal to the heartbeat service on a regular stop
+       1.7.1 A "fail" signal to the heartbeat service on a regular stop
              (Exit), so the service reports it at once instead of only
              after period + grace time. Effort: about 0.5 h.
    1.8 Installation via winget, the package manager built into Windows

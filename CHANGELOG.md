@@ -5,6 +5,11 @@ in brackets the `#AutoIt3Wrapper_Res_Fileversion` (shown in the tray menu
 and the log). The open items and ideas are kept in the roadmap
 (README.txt, section 16).
 
+## v81 (1.0.0.63)
+- Notifications: **Telegram** as a new channel (a bot of your own, bot
+  token + chat ID, "Find chat ID" button; problems with sound, "OK again"
+  and start/stop silently). ntfy and Telegram side by side in the window.
+
 ## v80 (1.0.0.62)
 - Notifications window 606 px high instead of 712 px, so it fits above the
   taskbar on small screens: Command and Heartbeat side by side, grey hint

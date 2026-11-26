@@ -22,7 +22,7 @@ fresh, and relays the message over its own TLS connection.
   autostart
 - Built-in test e-mail (incl. "Send As" / shared mailbox check) and
   connection test
-- Notifications: ntfy (push to the phone), webhooks (Teams Workflows,
+- Notifications: ntfy (push to the phone), Telegram bot, webhooks (Teams Workflows,
   Slack, Discord, Home Assistant, n8n, ...), a command of your own, and a
   heartbeat for monitoring services (healthchecks.io, Uptime Kuma, ...)
 - Detailed, rotating log with selectable detail level
@@ -42,7 +42,7 @@ fresh, and relays the message over its own TLS connection.
 <table>
   <tr>
     <td align="center" valign="top"><img src="docs/screenshots/add-account.png" alt="Add account" width="380"><br><em>Adding an account (Microsoft 365 preset)</em></td>
-    <td align="center" valign="top"><img src="docs/screenshots/notifications.png" alt="Notification settings" width="420"><br><em>Notifications: ntfy, webhook, command, heartbeat</em></td>
+    <td align="center" valign="top"><img src="docs/screenshots/notifications.png" alt="Notification settings" width="420"><br><em>Notifications: ntfy, Telegram, webhook, command, heartbeat</em></td>
   </tr>
   <tr>
     <td align="center" valign="top"><img src="docs/screenshots/advanced-settings.png" alt="Advanced settings" width="420"><br><em>Advanced settings with tooltips for every value</em></td>

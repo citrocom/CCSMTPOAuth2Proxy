@@ -1,7 +1,7 @@
 ﻿#NoTrayIcon
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=icons\default.ico
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.62
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.63
 #AutoIt3Wrapper_Res_Fileversion_AutoIncrement=y
 #AutoIt3Wrapper_Res_Icon_Add=icons\Exit.ico
 #AutoIt3Wrapper_Res_Icon_Add=icons\Settings.ico
@@ -324,6 +324,9 @@ Global $g_bNtfyEnabled = False
 Global $g_sNtfyServer = "https://ntfy.sh"
 Global $g_sNtfyTopic = ""
 Global $g_sNtfyTokenEnc = ""          ; optional access token, DPAPI-encrypted (as in the INI)
+Global $g_bTelegramEnabled = False    ; Z1 (v81)
+Global $g_sTelegramTokenEnc = ""      ; bot token from @BotFather, DPAPI-encrypted
+Global $g_sTelegramChatId = ""        ; numeric chat ID (group: negative) or @channelname
 Global $g_bWebhookEnabled = False
 Global $g_sWebhookUrlEnc = ""         ; DPAPI-encrypted - the URL itself is the secret
 Global $g_sWebhookTemplate = ""
@@ -5003,8 +5006,8 @@ EndFunc   ;==>_BuildLocalRedirectUri
 ;      once, so a slow or unreachable notification server can never hold up
 ;      the relaying of e-mail (AutoIt is single-threaded).
 ;   3. The SENDER process (_NotifyProcessMain()) reads and deletes the job,
-;      sends it over every channel listed in it (ntfy, webhook, command,
-;      heartbeat) and writes one result line per channel to stderr
+;      sends it over every channel listed in it (ntfy, Telegram, webhook,
+;      command, heartbeat) and writes one result line per channel to stderr
 ;      ("INF|...", "LOG|...", "ERR|...") - exactly like the PowerShell
 ;      helpers do (N2). It never writes into the log file itself.
 ;   4. _NotifyTick() (called from _ServiceConnections()) reads those lines
@@ -5044,6 +5047,9 @@ Func _NotifyLoadSettings()
 	If $g_sNtfyServer = "" Then $g_sNtfyServer = "https://ntfy.sh"
 	$g_sNtfyTopic = StringStripWS(IniRead($g_sIniPath, "Notify", "NtfyTopic", ""), 3)
 	$g_sNtfyTokenEnc = IniRead($g_sIniPath, "Notify", "NtfyTokenEnc", "")
+	$g_bTelegramEnabled = (__NotifyIniInt("TelegramEnabled", 0, 0, 1) = 1)
+	$g_sTelegramTokenEnc = IniRead($g_sIniPath, "Notify", "TelegramTokenEnc", "")
+	$g_sTelegramChatId = StringStripWS(IniRead($g_sIniPath, "Notify", "TelegramChatId", ""), 3)
 	$g_bWebhookEnabled = (__NotifyIniInt("WebhookEnabled", 0, 0, 1) = 1)
 	$g_sWebhookUrlEnc = IniRead($g_sIniPath, "Notify", "WebhookUrlEnc", "")
 	$g_sWebhookTemplate = StringStripWS(IniRead($g_sIniPath, "Notify", "WebhookTemplate", $NOTIFY_TPL_ALL), 3)
@@ -5080,6 +5086,7 @@ EndFunc   ;==>__NotifyIniInt
 Func __NotifyChannelList()
 	Local $s = ""
 	If $g_bNtfyEnabled And $g_sNtfyTopic <> "" Then $s &= ",ntfy"
+	If $g_bTelegramEnabled And $g_sTelegramTokenEnc <> "" And $g_sTelegramChatId <> "" Then $s &= ",telegram"
 	If $g_bWebhookEnabled And $g_sWebhookUrlEnc <> "" Then $s &= ",webhook"
 	If $g_bCommandEnabled And $g_sNotifyCommand <> "" Then $s &= ",command"
 	Return StringTrimLeft($s, 1)
@@ -5241,6 +5248,8 @@ Func __NotifyCurrentConfig()
 	$o.Item("NtfyServer") = $g_sNtfyServer
 	$o.Item("NtfyTopic") = $g_sNtfyTopic
 	$o.Item("NtfyTokenEnc") = $g_sNtfyTokenEnc
+	$o.Item("TelegramTokenEnc") = $g_sTelegramTokenEnc
+	$o.Item("TelegramChatId") = $g_sTelegramChatId
 	$o.Item("WebhookUrlEnc") = $g_sWebhookUrlEnc
 	$o.Item("WebhookTemplate") = $g_sWebhookTemplate
 	$o.Item("Command") = $g_sNotifyCommand
@@ -5262,7 +5271,7 @@ EndFunc   ;==>__NotifyOneLine
 ;               processes run at the same time (protection against a
 ;               flood if something goes badly wrong).
 ; Parameters  : $sEvent, $sTitle, $sAccount, $sText - content of the message.
-;               $sChannels   - Comma-separated channels (ntfy,webhook,
+;               $sChannels   - Comma-separated channels (ntfy,telegram,webhook,
 ;                              command,heartbeat).
 ;               $sPriority   - "high" or "default".
 ;               $bKeepOutput - True: keep the process's result lines for
@@ -5481,7 +5490,9 @@ EndFunc   ;==>_NotifyWaitAll
 ;               the dialog (saved or not), waits for the result (the proxy
 ;               keeps working meanwhile - _ServiceConnections()) and
 ;               returns the result lines.
-; Parameters  : $sChannel - "ntfy", "webhook", "command" or "heartbeat".
+; Parameters  : $sChannel - "ntfy", "telegram", "webhook", "command",
+;                          "heartbeat", or "telegram_chatid" (Z1: "Find chat
+;                          ID" - asks the bot which chats wrote to it).
 ;               $oCfg     - Channel settings from the dialog.
 ;               $hGui     - The dialog (disabled while the test runs).
 ; Returns     : Result text for the dialog.
@@ -5508,7 +5519,9 @@ Func __NotifyRunTest($sChannel, $oCfg, $hGui)
 	GUISetState(@SW_ENABLE, $hGui)
 	GUISetCursor(2, 0, $hGui)
 	WinActivate($hGui)
-	Return $sChannel & " test, " & @HOUR & ":" & @MIN & ":" & @SEC & ":" & @CRLF & StringStripWS($sOut, 2)
+	Local $sWhat = $sChannel & " test"
+	If $sChannel = "telegram_chatid" Then $sWhat = "Telegram chat search"
+	Return $sWhat & ", " & @HOUR & ":" & @MIN & ":" & @SEC & ":" & @CRLF & StringStripWS($sOut, 2)
 EndFunc   ;==>__NotifyRunTest
 
 ; ============================================================================
@@ -5578,6 +5591,10 @@ Func __NotifySendChannel($sCh, $oJob)
 	Switch $sCh
 		Case "ntfy"
 			Return __NotifySendNtfy($oJob)
+		Case "telegram"
+			Return __NotifySendTelegram($oJob)
+		Case "telegram_chatid"
+			Return __NotifyTelegramChatIds($oJob)
 		Case "webhook"
 			Return __NotifySendWebhook($oJob)
 		Case "command"
@@ -5753,6 +5770,96 @@ Func __NotifySendNtfy($oJob)
 	Return __NotifyReport("ntfy", __NotifyUrlHost($sServer), $iStatus, $sErr, $sResp)
 EndFunc   ;==>__NotifySendNtfy
 
+; ============================================================================
+; __NotifySendTelegram
+; ----------------------------------------------------------------------------
+; Description : Z1 (v81): Telegram channel - one call of the Bot API method
+;               sendMessage (https://api.telegram.org/bot<token>/sendMessage,
+;               JSON body). Deliberately a few lines of its own instead of
+;               the full CCTelegramUDF: this is the only method needed, and
+;               the proxy stays free of a dependency (and of its licence).
+;               Plain text (no Markdown/HTML parse mode), so no character in
+;               a message can break the formatting or make Telegram refuse
+;               it. Problems and test messages arrive with sound; "OK
+;               again", start and stop silently (disable_notification).
+;               The token is part of the URL and therefore never written to
+;               the log - the result line names only api.telegram.org.
+; Parameters  : $oJob - The job (TelegramTokenEnc, TelegramChatId, texts).
+; Returns     : True if Telegram answered with HTTP 2xx.
+; ============================================================================
+Func __NotifySendTelegram($oJob)
+	Local $sToken = _DPAPI_Unprotect(__NotifyJ($oJob, "TelegramTokenEnc"), "Telegram bot token")
+	Local $sChat = __NotifyJ($oJob, "TelegramChatId")
+	If $sToken = "" Or $sChat = "" Then
+		__NotifyOut("ERR", "telegram: bot token or chat ID not configured")
+		Return False
+	EndIf
+	Local $sSilent = "true"
+	If __NotifyJ($oJob, "Priority") = "high" Or __NotifyJ($oJob, "Event") = "test" Then $sSilent = "false"
+	; a numeric chat ID goes in as a number, "@channelname" as a string
+	Local $sChatJson = $sChat
+	If Not StringRegExp($sChat, "^-?[0-9]+$") Then $sChatJson = '"' & __NotifyJsonEsc($sChat) & '"'
+	Local $sText = __NotifyPlaceholder($oJob, "headline") & @LF & __NotifyPlaceholder($oJob, "message")
+	Local $sBody = '{"chat_id":' & $sChatJson & ',"text":"' & __NotifyJsonEsc($sText) & '","disable_notification":' & $sSilent & _
+			',"link_preview_options":{"is_disabled":true}}'
+	Local $iStatus = 0, $sErr = ""
+	Local $sResp = __NotifyHttp("POST", "https://api.telegram.org/bot" & $sToken & "/sendMessage", StringToBinary($sBody, 4), _
+			"application/json", "", $iStatus, $sErr)
+	Return __NotifyReport("telegram", "api.telegram.org", $iStatus, $sErr, $sResp)
+EndFunc   ;==>__NotifySendTelegram
+
+; ============================================================================
+; __NotifyTelegramChatIds
+; ----------------------------------------------------------------------------
+; Description : Z1: for the "Find chat ID" button - calls getUpdates of the
+;               bot and lists every chat that recently wrote to it (or
+;               added it to a group), one result line per chat:
+;               "telegram: chat ID <id> - <type> <name>". The dialog takes
+;               the ID over when exactly one chat is found. Telegram only
+;               keeps such updates for about 24 hours, so the user should
+;               write to the bot shortly before. A bot that has a webhook
+;               set cannot use getUpdates (HTTP 409) - then the reply text
+;               says so.
+; Parameters  : $oJob - The job (TelegramTokenEnc).
+; Returns     : True if the request worked (even if no chat was found).
+; ============================================================================
+Func __NotifyTelegramChatIds($oJob)
+	Local $sToken = _DPAPI_Unprotect(__NotifyJ($oJob, "TelegramTokenEnc"), "Telegram bot token")
+	If $sToken = "" Then
+		__NotifyOut("ERR", "telegram: please enter the bot token first")
+		Return False
+	EndIf
+	Local $iStatus = 0, $sErr = ""
+	Local $sResp = __NotifyHttp("GET", "https://api.telegram.org/bot" & $sToken & "/getUpdates", "", "", "", $iStatus, $sErr)
+	If $sErr <> "" Or $iStatus < 200 Or $iStatus > 299 Then Return __NotifyReport("telegram", "api.telegram.org", $iStatus, $sErr, $sResp)
+	Local $aChats = StringRegExp($sResp, '"chat":\{([^{}]*)\}', 3)
+	If @error Then
+		__NotifyOut("INF", "telegram: no chat found yet - send any message to the bot in Telegram (or add it to the group) " & _
+				"and click ""Find chat ID"" again")
+		Return True
+	EndIf
+	Local $sSeen = "|", $i = 0
+	For $i = 0 To UBound($aChats) - 1
+		Local $aId = StringRegExp($aChats[$i], '"id":(-?[0-9]+)', 1)
+		If @error Then ContinueLoop
+		If StringInStr($sSeen, "|" & $aId[0] & "|") Then ContinueLoop
+		$sSeen &= $aId[0] & "|"
+		Local $sName = "", $aName, $sKey
+		For $sKey In StringSplit("title|first_name|username", "|", 2)
+			$aName = StringRegExp($aChats[$i], '"' & $sKey & '":"((?:[^"\\]|\\.)*)"', 1)
+			If Not @error Then
+				$sName = $aName[0]
+				ExitLoop
+			EndIf
+		Next
+		Local $sType = ""
+		Local $aType = StringRegExp($aChats[$i], '"type":"([a-z_]+)"', 1)
+		If Not @error Then $sType = $aType[0] & " "
+		__NotifyOut("INF", "telegram: chat ID " & $aId[0] & " - " & $sType & $sName)
+	Next
+	Return True
+EndFunc   ;==>__NotifyTelegramChatIds
+
 ; Webhook: POST of the filled-in JSON template.
 Func __NotifySendWebhook($oJob)
 	Local $sUrl = _DPAPI_Unprotect(__NotifyJ($oJob, "WebhookUrlEnc"), "webhook URL")
@@ -5824,14 +5931,16 @@ EndFunc   ;==>__NotifySendCommand
 ; _ShowNotificationSettingsDialog
 ; ----------------------------------------------------------------------------
 ; Description : E1: dialog for the [Notify] INI section - the four channels
-;               (ntfy, webhook, command, heartbeat), each with its own
-;               "Test" button, and which events are reported. Every field
+;               (ntfy and Telegram side by side, webhook, command and
+;               heartbeat), each with its own "Test" button (Telegram also
+;               "Find chat ID"), and which events are reported. Every field
 ;               has a tooltip. "Test" sends a test message over that one
 ;               channel with the values currently in the window (saving is
 ;               not needed first) and shows the result at the bottom.
 ;               "Save" checks the input (e.g. a switched-on channel needs
 ;               its URL/topic/command), writes the [Notify] section
-;               (webhook URL, heartbeat URL and ntfy token DPAPI-encrypted,
+;               (webhook URL, heartbeat URL, ntfy token and Telegram bot
+;               token DPAPI-encrypted,
 ;               like every other secret of this program) and takes the
 ;               values over at once (_NotifyLoadSettings()); a newly
 ;               switched-on heartbeat pings right away. "Cancel" / X / Esc
@@ -5849,61 +5958,89 @@ Func _ShowNotificationSettingsDialog($hParent = 0)
 	_SetDialogIcon($hGui)
 	Local Const $xL = 28, $xI = 120, $wI = 492, $xT = 517
 
-	; ---- ntfy ------------------------------------------------------------
-	GUICtrlCreateGroup("ntfy - push messages to the phone (ntfy.sh or your own ntfy server)", 15, 10, $iW - 30, 112)
-	Local $idNtfyOn = GUICtrlCreateCheckbox("Send notifications via ntfy", $xL, 30, 300, 20)
+	; ---- ntfy (left) and Telegram (right) - Z1 (v81): side by side ---------
+	GUICtrlCreateGroup("ntfy - push messages to the phone", 15, 10, 300, 142)
+	Local $idNtfyOn = GUICtrlCreateCheckbox("Send via ntfy", $xL, 30, 180, 20)
 	GUICtrlSetTip($idNtfyOn, "Push messages to the ntfy app (Android, iPhone) or the ntfy web page." & @CRLF & _
 			"No account is needed on ntfy.sh: subscribe to the topic below in the app - done." & @CRLF & _
 			"INI: [Notify] NtfyEnabled, default: off")
-	Local $idNtfyTest = GUICtrlCreateButton("Test", $xT, 27, 95, 25)
+	Local $idNtfyTest = GUICtrlCreateButton("Test", 225, 27, 80, 25)
 	GUICtrlSetTip($idNtfyTest, "Send a test message via ntfy with the values in this window now" & @CRLF & "(no need to save first).")
-	GUICtrlCreateLabel("Server:", $xL, 61, 85, 18)
-	Local $idNtfyServer = GUICtrlCreateInput($g_sNtfyServer, $xI, 58, 205, 21)
+	GUICtrlCreateLabel("Server:", $xL, 61, 62, 18)
+	Local $idNtfyServer = GUICtrlCreateInput($g_sNtfyServer, 95, 58, 210, 21)
 	GUICtrlSetTip($idNtfyServer, "https://ntfy.sh (free public server) or the address of your own ntfy server." & @CRLF & _
 			"INI: [Notify] NtfyServer, default: https://ntfy.sh")
-	GUICtrlCreateLabel("Topic:", 340, 61, 45, 18)
+	GUICtrlCreateLabel("Topic:", $xL, 91, 62, 18)
 	; X1 (v78): no topic saved yet -> a suggestion that nobody can guess
 	; (__NotifyTopicSuggestion()), so it only has to be entered in the app.
 	Local $sTopicShown = $g_sNtfyTopic
 	If $sTopicShown = "" Then $sTopicShown = __NotifyTopicSuggestion()
-	Local $idNtfyTopic = GUICtrlCreateInput($sTopicShown, 390, 58, 222, 21)
+	Local $idNtfyTopic = GUICtrlCreateInput($sTopicShown, 95, 88, 210, 21)
 	GUICtrlSetTip($idNtfyTopic, "Name of the topic (letters, digits, - and _). On ntfy.sh anyone who knows the" & @CRLF & _
 			"name can read the messages - so choose a long name nobody can guess," & @CRLF & _
 			"e.g. citro-proxy-7Hq2xK9mPw. The same name is entered in the ntfy app." & @CRLF & _
 			"As long as no topic is saved, a random suggestion is filled in" & @CRLF & _
 			"(" & $g_sAppName & "- plus 8 random letters and digits)." & @CRLF & _
 			"INI: [Notify] NtfyTopic")
-	GUICtrlCreateLabel("Access token:", $xL, 91, 85, 18)
-	Local $idNtfyToken = GUICtrlCreateInput(_DPAPI_Unprotect($g_sNtfyTokenEnc, "ntfy access token"), $xI, 88, 205, 21, _
+	GUICtrlCreateLabel("Token:", $xL, 121, 62, 18)
+	Local $idNtfyToken = GUICtrlCreateInput(_DPAPI_Unprotect($g_sNtfyTokenEnc, "ntfy access token"), 95, 118, 210, 21, _
 			BitOR($GUI_SS_DEFAULT_INPUT, $ES_PASSWORD))
+	__SetCueBanner($idNtfyToken, "optional - protected topics only")
 	GUICtrlSetTip($idNtfyToken, "Optional - only for a protected topic (own server with user accounts, or a" & @CRLF & _
 			"reserved topic on ntfy.sh): an access token (tk_...) created in the ntfy web app" & @CRLF & _
 			"under Account -> Access tokens. Empty = no sign-in." & @CRLF & _
 			"Stored encrypted. INI: [Notify] NtfyTokenEnc")
-	Local $idNtfyHint = GUICtrlCreateLabel("(optional, only for protected topics)", 340, 91, 270, 18)
-	GUICtrlSetColor($idNtfyHint, 0x606060)
+	GUICtrlCreateGroup("", -99, -99, 1, 1)
+
+	GUICtrlCreateGroup("Telegram - messages from your own bot", 325, 10, 300, 142)
+	Local $idTgOn = GUICtrlCreateCheckbox("Send via Telegram", 338, 30, 180, 20)
+	GUICtrlSetTip($idTgOn, "Messages from a Telegram bot of your own into a private chat, a group or a channel." & @CRLF & _
+			"Create the bot in Telegram with @BotFather (/newbot) - see the README, section 15." & @CRLF & _
+			"Problems arrive with sound, ""OK again"" and start/stop messages silently." & @CRLF & _
+			"INI: [Notify] TelegramEnabled, default: off")
+	Local $idTgTest = GUICtrlCreateButton("Test", 535, 27, 80, 25)
+	GUICtrlSetTip($idTgTest, "Send a test message via Telegram with the values in this window now.")
+	GUICtrlCreateLabel("Bot token:", 338, 61, 64, 18)
+	Local $idTgToken = GUICtrlCreateInput(_DPAPI_Unprotect($g_sTelegramTokenEnc, "Telegram bot token"), 405, 58, 210, 21, _
+			BitOR($GUI_SS_DEFAULT_INPUT, $ES_PASSWORD))
+	__SetCueBanner($idTgToken, "123456789:AA... from @BotFather")
+	GUICtrlSetTip($idTgToken, "The token @BotFather gave you for the bot (it looks like 123456789:AAH...)." & @CRLF & _
+			"Whoever has it controls the bot - it is stored encrypted and never written to the log." & @CRLF & _
+			"INI: [Notify] TelegramTokenEnc")
+	GUICtrlCreateLabel("Chat ID:", 338, 91, 64, 18)
+	Local $idTgChat = GUICtrlCreateInput($g_sTelegramChatId, 405, 88, 118, 21)
+	__SetCueBanner($idTgChat, "e.g. 123456789")
+	GUICtrlSetTip($idTgChat, "Where the messages go: the ID of your private chat with the bot (a number)," & @CRLF & _
+			"of a group (a negative number, -100...) or a public channel as @channelname." & @CRLF & _
+			"Easiest: write any message to the bot, then click ""Find chat ID""." & @CRLF & _
+			"INI: [Notify] TelegramChatId")
+	Local $idTgFind = GUICtrlCreateButton("Find chat ID", 528, 86, 87, 25)
+	GUICtrlSetTip($idTgFind, "Asks the bot which chats wrote to it recently (Telegram keeps this for about" & @CRLF & _
+			"24 hours) and fills in the chat ID if exactly one is found. First send any message" & @CRLF & _
+			"to the bot in Telegram, or add the bot to the group.")
+	Local $idTgHint = GUICtrlCreateLabel("Bot from @BotFather - write to it, then ""Find chat ID"".", 338, 121, 280, 18)
+	GUICtrlSetColor($idTgHint, 0x606060)
 	GUICtrlCreateGroup("", -99, -99, 1, 1)
 
 	; ---- Webhook -----------------------------------------------------------
-	GUICtrlCreateGroup("Webhook - Teams, Slack, Discord, Home Assistant, n8n, Node-RED, ...", 15, 128, $iW - 30, 166)
-	Local $idHookOn = GUICtrlCreateCheckbox("Send notifications to a webhook", $xL, 148, 300, 20)
+	GUICtrlCreateGroup("Webhook - Teams, Slack, Discord, Home Assistant, n8n, Node-RED, ...", 15, 158, $iW - 30, 136)
+	Local $idHookOn = GUICtrlCreateCheckbox("Send to a webhook", $xL, 178, 190, 20)
 	GUICtrlSetTip($idHookOn, "Sends every message as an HTTPS POST with a JSON text to the URL below." & @CRLF & _
 			"INI: [Notify] WebhookEnabled, default: off")
-	Local $idHookTest = GUICtrlCreateButton("Test", $xT, 145, 95, 25)
+	Local $idHookPreset = GUICtrlCreateCombo("", 225, 176, 280, 22, BitOR($CBS_DROPDOWNLIST, $CBS_AUTOHSCROLL))
+	Local Const $sPresetNone = "(choose a preset to fill in the template)"
+	GUICtrlSetData($idHookPreset, $sPresetNone & "|Microsoft Teams (Workflows)|Slack / Mattermost / Rocket.Chat|Discord|" & _
+			"All fields (Home Assistant, n8n, Node-RED, others)", $sPresetNone)
+	GUICtrlSetTip($idHookPreset, "Format: fills the template below with the JSON format the chosen service" & @CRLF & _
+			"expects. You can change the template afterwards.")
+	Local $idHookTest = GUICtrlCreateButton("Test", $xT, 175, 95, 25)
 	GUICtrlSetTip($idHookTest, "Send a test message to the webhook with the values in this window now.")
-	GUICtrlCreateLabel("URL:", $xL, 179, 85, 18)
-	Local $idHookUrl = GUICtrlCreateInput(_DPAPI_Unprotect($g_sWebhookUrlEnc, "webhook URL"), $xI, 176, $wI, 21)
+	GUICtrlCreateLabel("URL:", $xL, 209, 85, 18)
+	Local $idHookUrl = GUICtrlCreateInput(_DPAPI_Unprotect($g_sWebhookUrlEnc, "webhook URL"), $xI, 206, $wI, 21)
 	GUICtrlSetTip($idHookUrl, "The webhook address you got from the service (e.g. Teams: Workflows ->" & @CRLF & _
 			"""Send webhook alerts to a channel"" -> copy the URL). It works like a password:" & @CRLF & _
 			"whoever has it can post messages - it is stored encrypted and never written to the log." & @CRLF & _
 			"INI: [Notify] WebhookUrlEnc")
-	GUICtrlCreateLabel("Format:", $xL, 209, 85, 18)
-	Local $idHookPreset = GUICtrlCreateCombo("", $xI, 206, 330, 22, BitOR($CBS_DROPDOWNLIST, $CBS_AUTOHSCROLL))
-	Local Const $sPresetNone = "(choose a preset to fill in the template)"
-	GUICtrlSetData($idHookPreset, $sPresetNone & "|Microsoft Teams (Workflows)|Slack / Mattermost / Rocket.Chat|Discord|" & _
-			"All fields (Home Assistant, n8n, Node-RED, others)", $sPresetNone)
-	GUICtrlSetTip($idHookPreset, "Fills the template below with the JSON format the chosen service expects." & @CRLF & _
-			"You can change the template afterwards.")
 	GUICtrlCreateLabel("Template:", $xL, 238, 85, 18)
 	Local $idHookTpl = GUICtrlCreateEdit($g_sWebhookTemplate, $xI, 236, $wI, 48, _
 			BitOR($ES_MULTILINE, $ES_WANTRETURN, $ES_AUTOVSCROLL, $WS_VSCROLL))
@@ -5960,7 +6097,7 @@ Func _ShowNotificationSettingsDialog($hParent = 0)
 	GUICtrlCreateGroup("", -99, -99, 1, 1)
 
 	; ---- Events ------------------------------------------------------------
-	GUICtrlCreateGroup("Events (for ntfy, webhook and command)", 15, 388, $iW - 30, 128)
+	GUICtrlCreateGroup("Events (for ntfy, Telegram, webhook and command)", 15, 388, $iW - 30, 128)
 	Local $idEvReauth = GUICtrlCreateCheckbox("Sign-in required", $xL, 408, 280, 20)
 	GUICtrlSetTip($idEvReauth, "An account needs a new sign-in (revoked, expired, password changed), and at the" & @CRLF & _
 			"start for every active account that has no sign-in yet." & @CRLF & _
@@ -6012,6 +6149,7 @@ Func _ShowNotificationSettingsDialog($hParent = 0)
 
 	; Current state of the switches
 	__NotifySetCheck($idNtfyOn, $g_bNtfyEnabled)
+	__NotifySetCheck($idTgOn, $g_bTelegramEnabled)
 	__NotifySetCheck($idHookOn, $g_bWebhookEnabled)
 	__NotifySetCheck($idCmdOn, $g_bCommandEnabled)
 	__NotifySetCheck($idHbOn, $g_bHeartbeatEnabled)
@@ -6050,6 +6188,10 @@ Func _ShowNotificationSettingsDialog($hParent = 0)
 
 			Case $idNtfyTest
 				$sChannel = "ntfy"
+			Case $idTgTest
+				$sChannel = "telegram"
+			Case $idTgFind
+				$sChannel = "telegram_chatid"
 			Case $idHookTest
 				$sChannel = "webhook"
 			Case $idCmdTest
@@ -6062,6 +6204,7 @@ Func _ShowNotificationSettingsDialog($hParent = 0)
 				$sErr = ""
 				$idFocus = 0
 				If __NotifyIsChecked($idNtfyOn) Then __NotifyCheckChannel("ntfy", $idNtfyServer, $idNtfyTopic, $sErr, $idFocus)
+				If $sErr = "" And __NotifyIsChecked($idTgOn) Then __NotifyCheckChannel("telegram", $idTgToken, $idTgChat, $sErr, $idFocus)
 				If $sErr = "" And __NotifyIsChecked($idHookOn) Then __NotifyCheckChannel("webhook", $idHookUrl, $idHookTpl, $sErr, $idFocus)
 				If $sErr = "" And __NotifyIsChecked($idCmdOn) Then __NotifyCheckChannel("command", $idCmd, 0, $sErr, $idFocus)
 				If $sErr = "" And __NotifyIsChecked($idHbOn) Then __NotifyCheckChannel("heartbeat", $idHbUrl, 0, $sErr, $idFocus)
@@ -6078,6 +6221,9 @@ Func _ShowNotificationSettingsDialog($hParent = 0)
 				IniWrite($g_sIniPath, "Notify", "NtfyServer", StringStripWS(GUICtrlRead($idNtfyServer), 3))
 				IniWrite($g_sIniPath, "Notify", "NtfyTopic", StringStripWS(GUICtrlRead($idNtfyTopic), 3))
 				IniWrite($g_sIniPath, "Notify", "NtfyTokenEnc", _DPAPI_Protect(StringStripWS(GUICtrlRead($idNtfyToken), 3)))
+				IniWrite($g_sIniPath, "Notify", "TelegramEnabled", Number(__NotifyIsChecked($idTgOn)))
+				IniWrite($g_sIniPath, "Notify", "TelegramTokenEnc", _DPAPI_Protect(StringStripWS(GUICtrlRead($idTgToken), 3)))
+				IniWrite($g_sIniPath, "Notify", "TelegramChatId", StringStripWS(GUICtrlRead($idTgChat), 3))
 				IniWrite($g_sIniPath, "Notify", "WebhookEnabled", Number(__NotifyIsChecked($idHookOn)))
 				IniWrite($g_sIniPath, "Notify", "WebhookUrlEnc", _DPAPI_Protect(StringStripWS(GUICtrlRead($idHookUrl), 3)))
 				IniWrite($g_sIniPath, "Notify", "WebhookTemplate", __NotifyOneLine(GUICtrlRead($idHookTpl)))
@@ -6099,7 +6245,8 @@ Func _ShowNotificationSettingsDialog($hParent = 0)
 				Local $bHbWasOn = ($g_bHeartbeatEnabled And $g_sHeartbeatUrlEnc <> "")
 				_NotifyLoadSettings()
 				If Not $bHbWasOn Then $g_hHeartbeatTimer = 0 ; a newly switched-on heartbeat pings right away
-				LogFile("Notification settings saved: ntfy " & __NotifyOnOff($g_bNtfyEnabled) & ", webhook " & __NotifyOnOff($g_bWebhookEnabled) & _
+				LogFile("Notification settings saved: ntfy " & __NotifyOnOff($g_bNtfyEnabled) & ", Telegram " & __NotifyOnOff($g_bTelegramEnabled) & _
+						", webhook " & __NotifyOnOff($g_bWebhookEnabled) & _
 						", command " & __NotifyOnOff($g_bCommandEnabled) & ", heartbeat " & __NotifyOnOff($g_bHeartbeatEnabled) & _
 						" (every " & $g_iHeartbeatIntervalMin & " min); same message at most every " & $g_iNotifyMinIntervalMin & " min.")
 				GUIDelete($hGui)
@@ -6114,6 +6261,10 @@ Func _ShowNotificationSettingsDialog($hParent = 0)
 			Switch $sChannel
 				Case "ntfy"
 					__NotifyCheckChannel("ntfy", $idNtfyServer, $idNtfyTopic, $sErr, $idFocus)
+				Case "telegram"
+					__NotifyCheckChannel("telegram", $idTgToken, $idTgChat, $sErr, $idFocus)
+				Case "telegram_chatid"
+					__NotifyCheckChannel("telegram", $idTgToken, 0, $sErr, $idFocus)
 				Case "webhook"
 					__NotifyCheckChannel("webhook", $idHookUrl, $idHookTpl, $sErr, $idFocus)
 				Case "command"
@@ -6130,12 +6281,27 @@ Func _ShowNotificationSettingsDialog($hParent = 0)
 			$oCfg.Item("NtfyServer") = StringStripWS(GUICtrlRead($idNtfyServer), 3)
 			$oCfg.Item("NtfyTopic") = StringStripWS(GUICtrlRead($idNtfyTopic), 3)
 			$oCfg.Item("NtfyTokenEnc") = _DPAPI_Protect(StringStripWS(GUICtrlRead($idNtfyToken), 3))
+			$oCfg.Item("TelegramTokenEnc") = _DPAPI_Protect(StringStripWS(GUICtrlRead($idTgToken), 3))
+			$oCfg.Item("TelegramChatId") = StringStripWS(GUICtrlRead($idTgChat), 3)
 			$oCfg.Item("WebhookUrlEnc") = _DPAPI_Protect(StringStripWS(GUICtrlRead($idHookUrl), 3))
 			$oCfg.Item("WebhookTemplate") = __NotifyOneLine(GUICtrlRead($idHookTpl))
 			$oCfg.Item("Command") = StringStripWS(GUICtrlRead($idCmd), 3)
 			$oCfg.Item("HeartbeatUrlEnc") = _DPAPI_Protect(StringStripWS(GUICtrlRead($idHbUrl), 3))
 			GUICtrlSetData($idResult, "Sending a test via " & $sChannel & " ...")
-			GUICtrlSetData($idResult, __NotifyRunTest($sChannel, $oCfg, $hGui))
+			Local $sTestResult = __NotifyRunTest($sChannel, $oCfg, $hGui)
+			GUICtrlSetData($idResult, $sTestResult)
+			; Z1: "Find chat ID" found exactly one chat -> take its ID over
+			If $sChannel = "telegram_chatid" Then
+				Local $aFound = StringRegExp($sTestResult, "chat ID (-?[0-9]+)", 3)
+				If Not @error Then
+					If UBound($aFound) = 1 Then
+						GUICtrlSetData($idTgChat, $aFound[0])
+						GUICtrlSetData($idResult, $sTestResult & @CRLF & "-> chat ID " & $aFound[0] & " filled in. Click ""Test"" to check it.")
+					Else
+						GUICtrlSetData($idResult, $sTestResult & @CRLF & "-> several chats found: enter the right chat ID by hand.")
+					EndIf
+				EndIf
+			EndIf
 		EndIf
 
 		If Not _ServiceConnections() Then Sleep($g_iMainLoopTickMs)
@@ -6213,6 +6379,20 @@ Func __NotifyCheckChannel($sChannel, $idMain, $idSecond, ByRef $sErr, ByRef $idF
 			If $sMain = "" Then
 				$sErr = "Command: please enter the command to run."
 				$idFocus = $idMain
+			EndIf
+		Case "telegram"
+			If Not StringRegExp($sMain, "^[0-9]{5,}:[A-Za-z0-9_-]{30,}$") Then
+				$sErr = "Telegram: please enter the bot token from @BotFather (it looks like 123456789:AAH...)."
+				$idFocus = $idMain
+				Return
+			EndIf
+			If $idSecond Then
+				Local $sChat = StringStripWS(GUICtrlRead($idSecond), 3)
+				If Not StringRegExp($sChat, "^(-?[0-9]{1,20}|@[A-Za-z][A-Za-z0-9_]{3,})$") Then
+					$sErr = "Telegram: please enter the chat ID (a number, for groups negative) or @channelname - " & _
+							"or click ""Find chat ID""."
+					$idFocus = $idSecond
+				EndIf
 			EndIf
 		Case "heartbeat"
 			If Not StringRegExp($sMain, "(?i)^https?://[^/\s]+") Then
